@@ -15,9 +15,10 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model import NetworkCIFAR as Network
 
+# python test.py --auxiliary --model_path cifar10_model.pt --data '~/workspace/data/cifar/cifar10'
 
 parser = argparse.ArgumentParser("cifar")
-parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
+parser.add_argument('--data', type=str, default='~/workspace/data/cifar/cifar10', help='location of the data corpus')
 parser.add_argument('--batch_size', type=int, default=96, help='batch size')
 parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
@@ -64,7 +65,8 @@ def main():
   criterion = criterion.cuda()
 
   _, test_transform = utils._data_transforms_cifar10(args)
-  test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
+  #test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
+  test_data = dset.CIFAR10(root=args.data, train=False, download=False, transform=test_transform)
 
   test_queue = torch.utils.data.DataLoader(
       test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=2)
@@ -80,18 +82,19 @@ def infer(test_queue, model, criterion):
   top5 = utils.AvgrageMeter()
   model.eval()
 
-  for step, (input, target) in enumerate(test_queue):
-    input = Variable(input, volatile=True).cuda()
-    target = Variable(target, volatile=True).cuda(async=True)
+  with torch.no_grad():# 新增
+    for step, (input_, target) in enumerate(test_queue):
+      input_ = input_.cuda()
+      target = target.cuda(non_blocking=True)
 
-    logits, _ = model(input)
-    loss = criterion(logits, target)
+      logits, _ = model(input_)
+      loss = criterion(logits, target)
 
-    prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
-    n = input.size(0)
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+      prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
+      n = input_.shape[0]
+      objs.update(loss.item(), n)
+      top1.update(prec1.item(), n)
+      top5.update(prec5.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('test %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)

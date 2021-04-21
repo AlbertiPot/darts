@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-Genotype = namedtuple('Genotype', 'normal normal_concat reduce reduce_concat')
+Genotype = namedtuple('Genotype', 'normal normal_concat reduce reduce_concat') #namedtuple，类似于一个类，类名是Genotype, normal等是属性
 
 PRIMITIVES = [
     'none',

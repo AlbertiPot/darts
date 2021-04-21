@@ -17,9 +17,10 @@ from torch.autograd import Variable
 from model_search import Network
 from architect import Architect
 
+# CUDA_VISIBLE_DEVICES=1 nohup python -u train_search.py --seed 1 --unrolled --save '8cells_64bs_50eps_1seed' > train_seed1.log 2>&1 &
 
 parser = argparse.ArgumentParser("cifar")
-parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
+parser.add_argument('--data', type=str, default='~/workspace/data/cifar/cifar10', help='location of the data corpus')
 parser.add_argument('--batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
 parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
@@ -78,26 +79,26 @@ def main():
   logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
   optimizer = torch.optim.SGD(
-      model.parameters(),
+      model.parameters(), ####### 这里指定用SGD对模型的权重训练
       args.learning_rate,
       momentum=args.momentum,
       weight_decay=args.weight_decay)
 
   train_transform, valid_transform = utils._data_transforms_cifar10(args)
-  train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+  train_data = dset.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
 
   num_train = len(train_data)
   indices = list(range(num_train))
-  split = int(np.floor(args.train_portion * num_train))
+  split = int(np.floor(args.train_portion * num_train)) # 用train set 训练参数时，根据train_portion划分训练集与验证集
 
   train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),  # 训练集的指针 from 0 到split点
       pin_memory=True, num_workers=2)
 
   valid_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]), # 验证集的指针 from split点 到数据集最后点
       pin_memory=True, num_workers=2)
 
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -106,11 +107,10 @@ def main():
   architect = Architect(model, args)
 
   for epoch in range(args.epochs):
-    scheduler.step()
     lr = scheduler.get_lr()[0]
     logging.info('epoch %d lr %e', epoch, lr)
 
-    genotype = model.genotype()
+    genotype = model.genotype() # 读取当前epoch的结构参数并log保存
     logging.info('genotype = %s', genotype)
 
     print(F.softmax(model.alphas_normal, dim=-1))
@@ -126,38 +126,39 @@ def main():
 
     utils.save(model, os.path.join(args.save, 'weights.pt'))
 
+    scheduler.step()
+
 
 def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
   objs = utils.AvgrageMeter()
   top1 = utils.AvgrageMeter()
   top5 = utils.AvgrageMeter()
 
-  for step, (input, target) in enumerate(train_queue):
+  for step, (input_, target) in enumerate(train_queue):      # 只训了1个epoch
     model.train()
-    n = input.size(0)
-
-    input = Variable(input, requires_grad=False).cuda()
-    target = Variable(target, requires_grad=False).cuda(async=True)
+    n = input_.size(0)
+    input_ = input_.cuda()
+    target = target.cuda(non_blocking=True)
 
     # get a random minibatch from the search queue with replacement
     input_search, target_search = next(iter(valid_queue))
-    input_search = Variable(input_search, requires_grad=False).cuda()
-    target_search = Variable(target_search, requires_grad=False).cuda(async=True)
+    input_search = input_search.cuda() # 输入image不需要跟踪grad，现在用torch.randn()生成的张量默认不跟踪grad，实例化conv等算子会调用parameter跟踪grad
+    target_search = target_search.cuda(non_blocking=True)
 
-    architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
+    architect.step(input_, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
 
     optimizer.zero_grad()
-    logits = model(input)
+    logits = model(input_)
     loss = criterion(logits, target)
 
     loss.backward()
-    nn.utils.clip_grad_norm(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+    objs.update(loss.data.item(), n)
+    top1.update(prec1.item(), n)
+    top5.update(prec5.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
@@ -171,21 +172,22 @@ def infer(valid_queue, model, criterion):
   top5 = utils.AvgrageMeter()
   model.eval()
 
-  for step, (input, target) in enumerate(valid_queue):
-    input = Variable(input, volatile=True).cuda()
-    target = Variable(target, volatile=True).cuda(async=True)
+  with torch.no_grad(): # 新增，降低内存使用
+    for step, (input_, target) in enumerate(valid_queue):
+      input_ = input_.cuda()
+      target = target.cuda(non_blocking=True)
 
-    logits = model(input)
-    loss = criterion(logits, target)
+      logits = model(input_)
+      loss = criterion(logits, target)
 
-    prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
-    n = input.size(0)
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+      prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
+      n = input_.size(0)
+      objs.update(loss.item(), n)
+      top1.update(prec1.item(), n)
+      top5.update(prec5.item(), n)
 
-    if step % args.report_freq == 0:
-      logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+      if step % args.report_freq == 0:
+        logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
   return top1.avg, objs.avg
 

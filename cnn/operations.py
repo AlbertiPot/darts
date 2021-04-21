@@ -84,14 +84,14 @@ class Zero(nn.Module):
   def forward(self, x):
     if self.stride == 1:
       return x.mul(0.)
-    return x[:,:,::self.stride,::self.stride].mul(0.)
+    return x[:,:,::self.stride,::self.stride].mul(0.) # seq[start:end:step],H和W方向上每隔stride×0
 
 
 class FactorizedReduce(nn.Module):
 
   def __init__(self, C_in, C_out, affine=True):
     super(FactorizedReduce, self).__init__()
-    assert C_out % 2 == 0
+    assert C_out % 2 == 0 # C_out整除2时抱错
     self.relu = nn.ReLU(inplace=False)
     self.conv_1 = nn.Conv2d(C_in, C_out // 2, 1, stride=2, padding=0, bias=False)
     self.conv_2 = nn.Conv2d(C_in, C_out // 2, 1, stride=2, padding=0, bias=False) 
@@ -99,7 +99,7 @@ class FactorizedReduce(nn.Module):
 
   def forward(self, x):
     x = self.relu(x)
-    out = torch.cat([self.conv_1(x), self.conv_2(x[:,:,1:,1:])], dim=1)
+    out = torch.cat([self.conv_1(x), self.conv_2(x[:,:,1:,1:])], dim=1) #拼接两个1×1conv，注意conv_2的H和W是从第二行、列开始卷的
     out = self.bn(out)
     return out
 
