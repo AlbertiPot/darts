@@ -162,7 +162,7 @@ class Network(nn.Module):
     gene_normal = _parse(F.softmax(self.alphas_normal, dim=-1).data.cpu().numpy()) # 将结构参数a softmax化后分割
     gene_reduce = _parse(F.softmax(self.alphas_reduce, dim=-1).data.cpu().numpy())
     
-    concat = range(2+self._steps-self._multiplier, self._steps+2) # 指定一个cell中所有节点输出feature map的拼接范围（一般是拼接后4个，也就是从2+self._steps-self._multiplier开始拼接）
+    concat = range(2+self._steps-self._multiplier, self._steps+2) # 指定一个cell中所有节点输出feature map的拼接范围（一般是拼接后4个节点的，也就是从2+self._steps-self._multiplier开始拼接）
     genotype = Genotype(
       normal=gene_normal, normal_concat=concat,
       reduce=gene_reduce, reduce_concat=concat

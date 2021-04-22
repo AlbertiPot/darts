@@ -110,7 +110,7 @@ def main():
     lr = scheduler.get_lr()[0]
     logging.info('epoch %d lr %e', epoch, lr)
 
-    genotype = model.genotype() # 读取当前epoch的结构参数并log保存
+    genotype = model.genotype() # 读取当前epoch的结构参数并log保存，自己从log中读取保存的参数写入genotype中开始train_from the scratch
     logging.info('genotype = %s', genotype)
 
     print(F.softmax(model.alphas_normal, dim=-1))
