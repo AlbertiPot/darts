@@ -14,7 +14,7 @@ class Architect(object):
     self.network_momentum = args.momentum
     self.network_weight_decay = args.weight_decay
     self.model = model
-    self.optimizer = torch.optim.Adam(self.model.arch_parameters(), ##### 指定优化结构参数
+    self.optimizer = torch.optim.Adam(self.model.arch_parameters(), #### 指定优化结构参数
         lr=args.arch_learning_rate, betas=(0.5, 0.999), weight_decay=args.arch_weight_decay)
 
   
