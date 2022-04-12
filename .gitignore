@@ -120,3 +120,6 @@ tags
 
 experiment_cache
 *.pt
+
+cnn/data
+nohup.out

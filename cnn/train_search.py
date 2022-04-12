@@ -39,7 +39,7 @@ parser.add_argument('--save', type=str, default='EXP', help='experiment name')
 parser.add_argument('--seed', type=int, default=2, help='random seed')
 parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
 parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss')
+parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss') # 二阶搜索unrolled，一阶不用
 parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
 parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
 args = parser.parse_args()
@@ -50,7 +50,7 @@ utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
     format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
+fh = logging.FileHandler(os.path.join(args.save, 'log.log'))
 fh.setFormatter(logging.Formatter(log_format))
 logging.getLogger().addHandler(fh)
 
@@ -94,12 +94,12 @@ def main():
   train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),  # 训练集的指针 from 0 到split点
-      pin_memory=True, num_workers=2)
+      pin_memory=True) #, num_workers=2) 去掉才可能不broken pipe 32的错
 
   valid_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]), # 验证集的指针 from split点 到数据集最后点
-      pin_memory=True, num_workers=2)
+      pin_memory=True) #, num_workers=2) 去掉才可能不报broken pipe 32的错
 
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, float(args.epochs), eta_min=args.learning_rate_min)
@@ -107,7 +107,7 @@ def main():
   architect = Architect(model, args)
 
   for epoch in range(args.epochs):
-    lr = scheduler.get_lr()[0]
+    lr = scheduler.get_last_lr()[0]
     logging.info('epoch %d lr %e', epoch, lr)
 
     genotype = model.genotype() # 读取当前epoch的结构参数并log保存，自己从log中读取保存的参数写入genotype中开始train_from the scratch

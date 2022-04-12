@@ -47,7 +47,7 @@ utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
     format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
+fh = logging.FileHandler(os.path.join(args.save, 'log.log'))
 fh.setFormatter(logging.Formatter(log_format))
 logging.getLogger().addHandler(fh)
 
@@ -90,16 +90,16 @@ def main():
   valid_data = dset.CIFAR10(root=args.data, train=False, download=False, transform=valid_transform)
 
   train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=4)
+      train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True)#, num_workers=4)
 
   valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
+      valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True)#, num_workers=4)
 
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs))
 
   for epoch in range(args.epochs):
     
-    logging.info('epoch %d lr %e', epoch, scheduler.get_lr()[0])
+    logging.info('epoch %d lr %e', epoch, scheduler.get_last_lr()[0])
     model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
 
     train_acc, train_obj = train(train_queue, model, criterion, optimizer)
@@ -126,11 +126,14 @@ def train(train_queue, model, criterion, optimizer):
     optimizer.zero_grad()
     logits, logits_aux = model(_input) # model返回了两个logits，另一个aux logits用相同的criterioin计算的loss，与logits计算的loss线性组合
     loss = criterion(logits, target)
+    
     if args.auxiliary: 
       loss_aux = criterion(logits_aux, target)
       loss += args.auxiliary_weight*loss_aux
     loss.backward()
+    
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    
     optimizer.step()
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
