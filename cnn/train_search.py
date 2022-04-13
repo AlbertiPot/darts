@@ -39,7 +39,7 @@ parser.add_argument('--save', type=str, default='EXP', help='experiment name')
 parser.add_argument('--seed', type=int, default=2, help='random seed')
 parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
 parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss') # 二阶搜索unrolled，一阶不用
+parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss')  # 二阶搜索unrolled，一阶不用
 parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
 parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
 parser.add_argument('--cifar100', action='store_true', default=False, help='search with cifar100 dataset')
@@ -49,10 +49,7 @@ args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout,
-                    level=logging.INFO,
-                    format=log_format,
-                    datefmt='%m/%d %I:%M:%S %p')
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
 fh = logging.FileHandler(os.path.join(args.save, 'log.log'))
 fh.setFormatter(logging.Formatter(log_format))
 logging.getLogger().addHandler(fh)
@@ -63,6 +60,7 @@ if args.cifar100:
 else:
     CIFAR_CLASSES = 10
     data_folder = 'cifar-10-batches-py'
+
 
 def main():
     if not torch.cuda.is_available():
@@ -92,21 +90,14 @@ def main():
 
     #  prepare dataset
     if args.cifar100:
-        train_transform, valid_transform = utils._data_transforms_cifar100(
-            args)
+        train_transform, valid_transform = utils._data_transforms_cifar100(args)
     else:
         train_transform, valid_transform = utils._data_transforms_cifar10(args)
 
     if args.cifar100:
-        train_data = dset.CIFAR100(root=args.data,
-                                   train=True,
-                                   download=True,
-                                   transform=train_transform)
+        train_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
     else:
-        train_data = dset.CIFAR10(root=args.data,
-                              train=True,
-                              download=False,
-                              transform=train_transform)
+        train_data = dset.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
 
     num_train = len(train_data)
     indices = list(range(num_train))
@@ -115,19 +106,16 @@ def main():
     train_queue = torch.utils.data.DataLoader(
         train_data,
         batch_size=args.batch_size,
-        sampler=torch.utils.data.sampler.SubsetRandomSampler(
-            indices[:split]),  # 训练集的指针 from 0 到split点
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),  # 训练集的指针 from 0 到split点
         pin_memory=True)  #, num_workers=2) 去掉才可能不broken pipe 32的错
 
     valid_queue = torch.utils.data.DataLoader(
         train_data,
         batch_size=args.batch_size,
-        sampler=torch.utils.data.sampler.SubsetRandomSampler(
-            indices[split:num_train]),  # 验证集的指针 from split点 到数据集最后点
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),  # 验证集的指针 from split点 到数据集最后点
         pin_memory=True)  #, num_workers=2) 去掉才可能不报broken pipe 32的错
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, float(args.epochs), eta_min=args.learning_rate_min)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), eta_min=args.learning_rate_min)
 
     architect = Architect(model, args)
 
@@ -135,16 +123,14 @@ def main():
         lr = scheduler.get_last_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
 
-        genotype = model.genotype(
-        )  # 读取当前epoch的结构参数并log保存，自己从log中读取保存的参数写入genotype中开始train_from the scratch
+        genotype = model.genotype()  # 读取当前epoch的结构参数并log保存，自己从log中读取保存的参数写入genotype中开始train_from the scratch
         logging.info('genotype = %s', genotype)
 
         print(F.softmax(model.alphas_normal, dim=-1))
         print(F.softmax(model.alphas_reduce, dim=-1))
 
         # training
-        train_acc, train_obj = train(train_queue, valid_queue, model,
-                                     architect, criterion, optimizer, lr)
+        train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr)
         logging.info('train_acc %f', train_acc)
 
         # validation
@@ -156,8 +142,7 @@ def main():
         scheduler.step()
 
 
-def train(train_queue, valid_queue, model, architect, criterion, optimizer,
-          lr):
+def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
@@ -170,17 +155,10 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer,
 
         # get a random minibatch from the search queue with replacement
         input_search, target_search = next(iter(valid_queue))
-        input_search = input_search.cuda(
-        )  # 输入image不需要跟踪grad，现在用torch.randn()生成的张量默认不跟踪grad，实例化conv等算子会调用parameter跟踪grad
+        input_search = input_search.cuda()  # 输入image不需要跟踪grad，现在用torch.randn()生成的张量默认不跟踪grad，实例化conv等算子会调用parameter跟踪grad
         target_search = target_search.cuda(non_blocking=True)
 
-        architect.step(input_,
-                       target,
-                       input_search,
-                       target_search,
-                       lr,
-                       optimizer,
-                       unrolled=args.unrolled)
+        architect.step(input_, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
 
         optimizer.zero_grad()
         logits = model(input_)
@@ -196,8 +174,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer,
         top5.update(prec5.item(), n)
 
         if step % args.report_freq == 0:
-            logging.info('train %03d %e %f %f', step, objs.avg, top1.avg,
-                         top5.avg)
+            logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg
 
@@ -223,8 +200,7 @@ def infer(valid_queue, model, criterion):
             top5.update(prec5.item(), n)
 
             if step % args.report_freq == 0:
-                logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg,
-                             top5.avg)
+                logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg
 
