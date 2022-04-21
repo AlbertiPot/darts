@@ -154,7 +154,16 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
         target = target.cuda(non_blocking=True)
 
         # get a random minibatch from the search queue with replacement
-        input_search, target_search = next(iter(valid_queue))
+        # origin:
+        # input_search, target_search = next(iter(valid_queue))
+        
+        # 第一次遍历时创建iter，之后遍历直接调用next
+        try:
+            input_search, target_search = next(valid_queue_iter)
+        except:
+            valid_queue_iter = iter(valid_queue)
+            input_search, target_search = next(valid_queue_iter)
+        
         input_search = input_search.cuda()  # 输入image不需要跟踪grad，现在用torch.randn()生成的张量默认不跟踪grad，实例化conv等算子会调用parameter跟踪grad
         target_search = target_search.cuda(non_blocking=True)
 

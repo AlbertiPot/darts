@@ -39,6 +39,8 @@ parser.add_argument('--save', type=str, default='EXP', help='experiment name')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
 parser.add_argument('--arch', type=str, default='DARTS', help='which architecture to use')
 parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
+parser.add_argument('--cifar100', action='store_true', default=False, help='if use cifar100')
+
 args = parser.parse_args()
 
 args.save = 'eval-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
@@ -50,8 +52,12 @@ fh = logging.FileHandler(os.path.join(args.save, 'log.log'))
 fh.setFormatter(logging.Formatter(log_format))
 logging.getLogger().addHandler(fh)
 
-CIFAR_CLASSES = 10
-
+if args.cifar100:
+    CIFAR_CLASSES = 100
+    data_folder = 'cifar-100-python'
+else:
+    CIFAR_CLASSES = 10
+    data_folder = 'cifar-10-batches-py'
 
 def main():
     if not torch.cuda.is_available():
@@ -69,7 +75,7 @@ def main():
     logging.info('gpu device = %d' % args.gpu)
     logging.info("args = %s", args)
 
-    genotype = eval("genotypes.%s" % args.arch)  # 用eval执行 "genotypes.arg.arch" 将上一步搜好的结构实例化
+    genotype = eval("genotypes.%s" % args.arch)  # 用eval执行 "genotypes.arg.arch" 将字符串指定config的结构实例化
     model = Network(args.init_channels, CIFAR_CLASSES, args.layers, args.auxiliary, genotype)
     model = model.cuda()
 
@@ -79,9 +85,17 @@ def main():
     criterion = criterion.cuda()
     optimizer = torch.optim.SGD(model.parameters(), args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
 
-    train_transform, valid_transform = utils._data_transforms_cifar10(args)
-    train_data = dset.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
-    valid_data = dset.CIFAR10(root=args.data, train=False, download=False, transform=valid_transform)
+    if args.cifar100:
+        train_transform, valid_transform = utils._data_transforms_cifar100(args)
+    else:
+        train_transform, valid_transform = utils._data_transforms_cifar10(args)
+    
+    if args.cifar100:
+        train_data = dset.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
+        valid_data = dset.CIFAR100(root=args.data, train=False, download=False, transform=valid_transform)
+    else:
+        train_data = dset.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
+        valid_data = dset.CIFAR10(root=args.data, train=False, download=False, transform=valid_transform)
 
     train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True)  #, num_workers=4)
 
