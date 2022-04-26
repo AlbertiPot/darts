@@ -107,13 +107,13 @@ def main():
         train_data,
         batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),  # 训练集的指针 from 0 到split点
-        pin_memory=True)  #, num_workers=2) 去掉才可能不broken pipe 32的错
+        pin_memory=True, num_workers=4)
 
     valid_queue = torch.utils.data.DataLoader(
         train_data,
         batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),  # 验证集的指针 from split点 到数据集最后点
-        pin_memory=True)  #, num_workers=2) 去掉才可能不报broken pipe 32的错
+        pin_memory=True, num_workers=4)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), eta_min=args.learning_rate_min)
 
@@ -123,15 +123,15 @@ def main():
         lr = scheduler.get_last_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
 
+        # training
+        train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr)
+        logging.info('train_acc %f', train_acc)
+
         genotype = model.genotype()  # 读取当前epoch的结构参数并log保存，自己从log中读取保存的参数写入genotype中开始train_from the scratch
         logging.info('genotype = %s', genotype)
 
         print(F.softmax(model.alphas_normal, dim=-1))
         print(F.softmax(model.alphas_reduce, dim=-1))
-
-        # training
-        train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr)
-        logging.info('train_acc %f', train_acc)
 
         # validation
         valid_acc, valid_obj = infer(valid_queue, model, criterion)

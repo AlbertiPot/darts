@@ -42,9 +42,10 @@ class Cutout(object):
         self.length = length
 
     def __call__(self, img):
-        h, w = img.size(1), img.size(2)
+        h, w = img.size(1), img.size(2)# (CHW)
         mask = np.ones((h, w), np.float32)
-        y = np.random.randint(h)
+        
+        y = np.random.randint(h)    # 中心点坐标
         x = np.random.randint(w)
 
         y1 = np.clip(y - self.length // 2, 0, h)
