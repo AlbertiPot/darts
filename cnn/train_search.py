@@ -45,7 +45,7 @@ parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weigh
 parser.add_argument('--cifar100', action='store_true', default=False, help='search with cifar100 dataset')
 args = parser.parse_args()
 
-args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+args.save = '/data/gbc/Workspace/darts/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 log_format = '%(asctime)s %(message)s'
@@ -107,13 +107,13 @@ def main():
         train_data,
         batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),  # 训练集的指针 from 0 到split点
-        pin_memory=True, num_workers=4)
+        pin_memory=True, num_workers=2)
 
     valid_queue = torch.utils.data.DataLoader(
         train_data,
         batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),  # 验证集的指针 from split点 到数据集最后点
-        pin_memory=True, num_workers=4)
+        pin_memory=True, num_workers=2)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), eta_min=args.learning_rate_min)
 
