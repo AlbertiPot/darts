@@ -130,8 +130,8 @@ def main():
         genotype = model.genotype()  # 读取当前epoch的结构参数并log保存，自己从log中读取保存的参数写入genotype中开始train_from the scratch
         logging.info('genotype = %s', genotype)
 
-        print(F.softmax(model.alphas_normal, dim=-1))
-        print(F.softmax(model.alphas_reduce, dim=-1))
+        logging.info(F.softmax(model.alphas_normal, dim=-1))
+        logging.info(F.softmax(model.alphas_reduce, dim=-1))
 
         # validation
         valid_acc, valid_obj = infer(valid_queue, model, criterion)
