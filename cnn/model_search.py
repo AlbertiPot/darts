@@ -103,19 +103,23 @@ class Network(nn.Module):
     return model_new
 
   def forward(self, input):
+    inter_feature = []
     s0 = s1 = self.stem(input)
     for i, cell in enumerate(self.cells):
       if cell.reduction:
         weights = F.softmax(self.alphas_reduce, dim=-1) # 结构参数是在__init__中调用私有方法_initialize_alphas初始化的，在这里付给weights后传给cells中进行加权
       else:
         weights = F.softmax(self.alphas_normal, dim=-1)
+      if cell.reduction:
+        inter_feature.append(s1.clone().detach().cpu())
       s0, s1 = s1, cell(s0, s1, weights)  # s0，s1指针挪一位
+    inter_feature.append(s1.clone().detach().cpu())
     out = self.global_pooling(s1)
     logits = self.classifier(out.view(out.size(0),-1))
-    return logits
+    return logits, inter_feature
 
   def _loss(self, input, target):
-    logits = self(input)
+    logits, _ = self(input)
     return self._criterion(logits, target) 
 
   def _initialize_alphas(self):

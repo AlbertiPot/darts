@@ -37,14 +37,29 @@
 # --cifar100 \
 # --arch v2c10seed2
 
-CUDA_VISIBLE_DEVICES=0 /root/miniconda3/envs/rookie/bin/python /data/gbc/Workspace/darts/cnn/train_search.py --data '/data/gbc/Datasets/cifar/cifar10' \
---save 'timecost_c10_v1c10seed9999' \
---seed 9999 \
---learning_rate_min 0 \
---unrolled
+# CUDA_VISIBLE_DEVICES=0 /root/miniconda3/envs/rookie/bin/python /data/gbc/Workspace/darts/cnn/train_search.py --data '/data/gbc/Datasets/cifar/cifar10' \
+# --save 'timecost_c10_v1c10seed9999' \
+# --seed 9999 \
+# --learning_rate_min 0 \
+# --unrolled
 
-CUDA_VISIBLE_DEVICES=0 /root/miniconda3/envs/rookie/bin/python /data/gbc/Workspace/darts/cnn/train_search.py --data '/data/gbc/Datasets/cifar/cifar100' \
---save 'timecost_c100_v2c100seed9999' \
---seed 9999 \
+# CUDA_VISIBLE_DEVICES=0 /root/miniconda3/envs/rookie/bin/python /data/gbc/Workspace/darts/cnn/train_search.py --data '/data/gbc/Datasets/cifar/cifar100' \
+# --save 'timecost_c100_v2c100seed9999' \
+# --seed 9999 \
+# --learning_rate_min 0 \
+# --cifar100 --unrolled
+
+# timecost test
+# python train_search.py \
+# --data '/data/usr/gbc/dataset/cifar/cifar10' \
+# --save 'timecost_c10_v1c10seed9999' \
+# --seed 2 \
+# --learning_rate_min 0
+
+# visual on c10
+CUDA_VISIBLE_DEVICES=1 python cnn/train_search.py \
+--data '/data/usr/gbc/dataset/cifar/cifar10' \
+--save 'visual_c10_v1c10seed2' \
+--seed 2 \
 --learning_rate_min 0 \
---cifar100 --unrolled
+--visual

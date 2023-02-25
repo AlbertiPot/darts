@@ -43,9 +43,10 @@ parser.add_argument('--unrolled', action='store_true', default=False, help='use 
 parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
 parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
 parser.add_argument('--cifar100', action='store_true', default=False, help='search with cifar100 dataset')
+parser.add_argument('--visual', action='store_true', default=False, help='visualize intermediate feature')
 args = parser.parse_args()
 
-args.save = '/data/gbc/Workspace/darts/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+args.save = '/data/usr/gbc/workspace/darts/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
 utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 log_format = '%(asctime)s %(message)s'
@@ -99,6 +100,15 @@ def main():
     else:
         train_data = dset.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
 
+    if ( not args.cifar100 ) and args.visual:
+        _, test_transform = utils._data_transforms_cifar10(args)
+        visual_data = dset.CIFAR10(root=args.data, train=False, download=False, transform=test_transform)
+        g_cpu = torch.Generator()
+        g_cpu.manual_seed(args.seed)
+        visual_idx = torch.randperm(100,generator=g_cpu)
+        logging.info('visual image index = {}'.format(visual_idx))
+        feature_dict = {}
+
     num_train = len(train_data)
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))  # 用train set 训练参数时，根据train_portion划分训练集与验证集
@@ -107,18 +117,20 @@ def main():
         train_data,
         batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),  # 训练集的指针 from 0 到split点
-        pin_memory=True, num_workers=2)
+        pin_memory=True, num_workers=8)
 
     valid_queue = torch.utils.data.DataLoader(
         train_data,
         batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),  # 验证集的指针 from split点 到数据集最后点
-        pin_memory=True, num_workers=2)
+        pin_memory=True, num_workers=8)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), eta_min=args.learning_rate_min)
 
     architect = Architect(model, args)
 
+    torch.cuda.synchronize()
+    start =  time.time()
     for epoch in range(args.epochs):
         lr = scheduler.get_last_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
@@ -141,6 +153,16 @@ def main():
 
         scheduler.step()
 
+        # for intermediate feature visualize
+        if ( not args.cifar100 ) and args.visual:
+            feature_list = visual(visual_idx, visual_data, model)
+            feature_dict[epoch] = feature_list
+
+    torch.cuda.synchronize()
+    running_time = time.time()-start
+    logging.info('search time: {} seconds'.format(running_time))
+    if ( not args.cifar100 ) and args.visual:
+        torch.save(feature_dict, os.path.join(args.save, 'inter_feature.pt'))
 
 def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     objs = utils.AvgrageMeter()
@@ -170,7 +192,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
         architect.step(input_, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
 
         optimizer.zero_grad()
-        logits = model(input_)
+        logits, _ = model(input_)
         loss = criterion(logits, target)
 
         loss.backward()
@@ -199,7 +221,7 @@ def infer(valid_queue, model, criterion):
             input_ = input_.cuda()
             target = target.cuda(non_blocking=True)
 
-            logits = model(input_)
+            logits, _ = model(input_)
             loss = criterion(logits, target)
 
             prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
@@ -212,6 +234,18 @@ def infer(valid_queue, model, criterion):
                 logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg
+
+@torch.no_grad()
+def visual(visual_idx, visual_data, model):
+    model.eval()
+    feature_list = []
+    for i in visual_idx:
+        img, _ = visual_data[i]
+        input_ = img.cuda().unsqueeze(0)    # C,H,W to B,C,H,W
+        _, inter_feature = model(input_)
+        feature_list.append(inter_feature)
+
+    return feature_list
 
 
 if __name__ == '__main__':
